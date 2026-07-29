@@ -1,0 +1,28 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "idm-heatpump-mcp"
+version = "0.1.0"
+description = "Safe MCP server for IDM heat pumps"
+readme = "README.md"
+requires-python = ">=3.11"
+license = {file = "LICENSE"}
+dependencies = ["mcp[cli]>=1.2,<2", "pydantic-settings>=2.6,<3", "pymodbus>=3.7,<3.9"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<9", "pytest-asyncio>=0.24,<1", "ruff>=0.8,<1"]
+
+[project.scripts]
+idm-mcp = "idm_mcp.server:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/idm_mcp"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
