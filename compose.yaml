@@ -1,0 +1,5 @@
+services:
+  idm-mcp:
+    build: .
+    env_file: .env
+    restart: unless-stopped
