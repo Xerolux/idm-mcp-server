@@ -57,3 +57,38 @@ Schreibplan vorab geprüft werden, ohne das Gerät zu berühren.
 | Variable | Standard | Bedeutung |
 |---|---:|---|
 | `IDM_CACHE_TTL` | `5` | Sekunden, die ein `read_all`-Snapshot gilt (`0` = deaktiviert) |
+| `IDM_POLL_INTERVAL` | `0` | Sekunden zwischen Hintergrund-Polls (`0` = aus). Aktualisiert den Snapshot, überwacht die Verbindung und erhält zyklische GLT-Anforderungen |
+
+## Optionales Web-Supplement
+
+Das lokale Web-Interface des Controllers ergänzt Modbus um Störungen im Klartext,
+Softwarestand und eine zweite Schreibbahn. Voraussetzung ist die im Controller gesetzte
+Web-PIN.
+
+| Variable | Standard | Bedeutung |
+|---|---:|---|
+| `IDM_WEB_PIN` | leer | Web-PIN des Controllers; leer = Web-Supplement deaktiviert |
+| `IDM_WEB_VARIANT` | `auto` | `auto` = aus dem erkannten Modell (`nav10` für Navigator 10/Pro, `nav20` für Navigator 2.0); alternativ `nav10`/`nav20` erzwingen oder `off` abschalten |
+| `IDM_WEB_PORT` | `61220` | WebSocket-Port des Navigator-10-Web-Interfaces |
+
+Web-Schreibaktionen laufen durch dieselbe Freigabe wie ihre Modbus-Äquivalente:
+
+| Web-Aktion | Äquivalentes Register | Erforderliche Write-Klasse |
+|---|---|---|
+| `web_set_system_mode` | `system_mode` | `eeprom` |
+| `web_save_dhw_setpoint` | `dhw_setpoint` | `eeprom` |
+| `web_acknowledge_notifications` | `error_acknowledge` | `write_only` |
+| `web_set_datetime` | – (Uhrzeit, flüchtig) | `volatile` |
+
+## MCP-Transport
+
+| Variable | Standard | Bedeutung |
+|---|---:|---|
+| `IDM_TRANSPORT` | `stdio` | `stdio` für lokale Clients oder `http` für einen Streamable-HTTP-Server |
+| `IDM_HTTP_HOST` | `127.0.0.1` | Bind-Adresse im HTTP-Modus |
+| `IDM_HTTP_PORT` | `8308` | Port im HTTP-Modus (Pfad `/mcp`) |
+
+Der HTTP-Modus bringt keine eigene Authentifizierung mit. Standardmäßig wird nur die lokale
+Loopback-Adresse gebunden; für Zugriff aus dem LAN einen Reverse-Proxy mit TLS und
+Zugangsbeschränkung vorschalten. Den Modbus-Port der Wärmepumpe und das ungeschützte
+HTTP-Interface niemals direkt exponieren.

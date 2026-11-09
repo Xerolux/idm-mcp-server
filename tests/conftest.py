@@ -100,6 +100,101 @@ def make_service(fake: FakeTransport, **settings_overrides) -> tuple[IdmService,
     return IdmService(settings, client), fake
 
 
+class FakeWebClient:
+    """Duck-typed Navigator 10 web client recording every call."""
+
+    def __init__(self) -> None:
+        from idm_heatpump.web import (
+            IdmWebData,
+            IdmWebDiagnostics,
+            IdmWebNotification,
+            IdmWebNotifications,
+            IdmWebValue,
+        )
+
+        self._IdmWebData = IdmWebData
+        self._IdmWebDiagnostics = IdmWebDiagnostics
+        self._IdmWebNotifications = IdmWebNotifications
+        self._IdmWebNotification = IdmWebNotification
+        self._IdmWebValue = IdmWebValue
+        self.calls: list[tuple[str, tuple, dict]] = []
+        self.closed = False
+
+    def _record(self, name: str, *args: object, **kwargs: object) -> None:
+        self.calls.append((name, args, kwargs))
+
+    async def read_data(self, **_: object) -> object:
+        self._record("read_data")
+        return self._IdmWebData(
+            model="Navigator 10 Web",
+            values={
+                "software_version": self._IdmWebValue(
+                    "software_version", "NAV10_20.24", "software_version"
+                ),
+                "heatpump_model": self._IdmWebValue(
+                    "heatpump_model", "Terra MMW 406", "heatpump_model"
+                ),
+            },
+        )
+
+    async def read_notifications(self, **_: object) -> object:
+        self._record("read_notifications")
+        return self._IdmWebNotifications(
+            current=(
+                self._IdmWebNotification(
+                    code="142",
+                    message="Wärmepumpenvorlauf Maximaltemperatur",
+                    severity="error",
+                    deferrable=False,
+                ),
+            )
+        )
+
+    async def set_system_mode(self, mode: int) -> None:
+        self._record("set_system_mode", int(mode))
+
+    async def save_dhw_setpoint(self, celsius: float) -> None:
+        self._record("save_dhw_setpoint", float(celsius))
+
+    async def acknowledge_all_notifications(self) -> None:
+        self._record("acknowledge_all_notifications")
+
+    async def acknowledge_notification(self, code: str, *, remind_me_later: bool = False) -> None:
+        self._record("acknowledge_notification", code, remind_me_later=remind_me_later)
+
+    async def set_datetime(self, value: object) -> None:
+        self._record("set_datetime", value)
+
+    async def close(self) -> None:
+        self.closed = True
+
+    def get_cached_data(self) -> object | None:
+        return None
+
+    def diagnostics(self) -> object:
+        return self._IdmWebDiagnostics(
+            navigator_type="nav10", websocket_connected=True, web_data_enabled=True
+        )
+
+
+def attach_fake_web(
+    service: IdmService, web_client: FakeWebClient | None = None, variant: str = "nav10"
+) -> FakeWebClient:
+    """Give a ready service a web supplement backed by a fake client."""
+    from idm_mcp.web import WebSupplement
+
+    web_client = web_client or FakeWebClient()
+    service.web = WebSupplement(
+        service.settings,
+        "Navigator 10",
+        gate=service._gate_web_write,
+        client_factory=lambda: web_client,
+    )
+    service.settings.web_pin = service.settings.web_pin or "1234"
+    service.settings.web_variant = variant
+    return web_client
+
+
 @pytest.fixture
 def fake() -> FakeTransport:
     transport = FakeTransport()

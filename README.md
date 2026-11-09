@@ -63,6 +63,17 @@ keine Diagramme und ersetzt weder Home Assistant noch `idm-heatpump-api` selbst.
   freigegebene Register mit voller Bereichs-, Enum- und Modellprüfung schreiben.
 - **Diagnose:** Verbindungsstatus, dauerhaft fehlgeschlagene und nicht unterstützte Register sowie
   zyklische Schreibanforderungen einsehen.
+- **Web-Supplement (optional):** über die im Controller gesetzte Web-PIN (`IDM_WEB_PIN`) stehen das
+  Navigator-10-WebSocket- bzw. Navigator-2.0-HTTP-Interface bereit: aktive Störungen im Klartext,
+  Softwarestand und Gerätebezeichnung lesen sowie Betriebsmodus, Warmwasser-Sollwert, Uhrzeit
+  setzen und Meldungen quittieren. Web-Schreibaktionen laufen durch dieselbe Write-Klassen-Freigabe
+  wie die äquivalenten Modbus-Register.
+- **Hintergrund-Polling (optional):** mit `IDM_POLL_INTERVAL` aktualisiert ein Hintergrundtask den
+  Snapshot, überwacht die Verbindung (Exponential-Backoff bei Störungen) und hält zyklische
+  GLT-Anforderungen (`cyclic`-Register) vor Ablauf ihrer TTL am Leben.
+- **Zwei Transporte:** lokales `stdio` (Standard) oder Streamable-HTTP (`IDM_TRANSPORT=http`,
+  bindet standardmäßig an `127.0.0.1`) – etwa für Container- oder LAN-Betrieb hinter einem
+  abgesicherten Reverse-Proxy.
 - **Lokal bleiben:** Die Verbindung zur Wärmepumpe erfolgt aus dem eigenen Netzwerk; der Server
   benötigt keinen Cloud-Zugang.
 
@@ -78,6 +89,12 @@ keine Diagramme und ersetzt weder Home Assistant noch `idm-heatpump-api` selbst.
 | `write_datapoint` | Freigegebenen Wert setzen (Default: gesperrt) | „Setze `dhw_setpoint` auf 52.“ |
 | `explain_error_code` | Controller-Meldungsnummer erklären | „Was bedeutet Meldung 142?“ |
 | `get_diagnostics` | Verbindungs- und Registerdiagnose | „Welche Register schlagen fehl?“ |
+| `read_web_data` | Lokales Web-Interface auslesen (Softwarestand, Modell, Infosystem) | „Welche Firmware hat der Navigator?“ |
+| `read_web_notifications` | Aktive Störungen mit Klartext (Navigator 10) | „Welche Meldungen liegen an?“ |
+| `web_set_system_mode` | Betriebsmodus per Web setzen (0–5) | „Stelle auf Nur-Warmwasser.“ |
+| `web_save_dhw_setpoint` | Warmwasser-Sollwert per Web setzen | „Setze Warmwasser auf 52 °C.“ |
+| `web_acknowledge_notifications` | Störungen per Web quittieren | „Quittiere alle Meldungen.“ |
+| `web_set_datetime` | Controller-Uhr stellen | „Synchronisiere die Uhr.“ |
 
 ### Verfügbare MCP-Resources
 
@@ -88,6 +105,7 @@ keine Diagramme und ersetzt weder Home Assistant noch `idm-heatpump-api` selbst.
 | `idm://datapoints/{key}` | Aktueller Wert eines Datenpunkts |
 | `idm://values` | Zwischengespeicherter Gesamt-Snapshot |
 | `idm://diagnostics` | Client-Diagnose |
+| `idm://web` | Web-Supplement-Snapshot (sofern verbunden) |
 
 Welche konkreten Datenpunkte existieren, entscheidet die erkannte Anlage bzw. die Registerkarte
 der `idm-heatpump-api`.
@@ -107,6 +125,11 @@ und Modellverfügbarkeit und drosselt wiederholte EEPROM-Schreibzugriffe (max. e
 und 60 s) zum Schutz des begrenzt beschreibbaren Controllerspeichers. Mit `validate_write` oder
 `dry_run=true` lässt sich jeder Schreibplan vorab prüfen, ohne das Gerät zu berühren. Weitere
 Hinweise stehen unter [Sicherer Betrieb](docs/safety.md).
+
+Web-Schreibaktionen werden über die Write-Klasse ihres jeweiligen Modbus-Äquivalents kontrolliert:
+`web_set_system_mode` und `web_save_dhw_setpoint` benötigen `eeprom` (wie `system_mode` bzw.
+`dhw_setpoint`), `web_acknowledge_notifications` benötigt `write_only` (wie `error_acknowledge`),
+`web_set_datetime` benötigt `volatile`. Eine gesetzte `IDM_WRITABLE_KEYS`-Allowlist greift auch hier.
 
 ## Voraussetzungen
 
@@ -164,8 +187,12 @@ in einem separaten Repository und werden nicht automatisch mit diesem Repository
 
 - Lesen und Schreiben einzelner 16-/32-Bit-Register gemäß Registerkarte der
   `idm-heatpump-api`; keine freien Rohadressen ohne Kartenbezug,
-- keine mitgelieferte Zeitreihen, Statistiken, Diagramme oder lokale Datenbank,
-- aktuell nur lokaler MCP-Transport über `stdio`, kein öffentlicher HTTPS-Endpunkt,
+- Web-Supplement nur gegen lokal erreichbares Web-Interface mit gesetzter PIN; Navigator 1.x hat
+  kein lokales Web-Interface,
+- keine mitgelieferte Zeitreihen, Statistiken, Diagramme oder lokale Datenbank (das
+  Hintergrund-Polling hält nur den letzten Snapshot vor),
+- HTTP-Transport ohne eigene Authentifizierung – nur an `127.0.0.1` binden oder vor einen
+  Reverse-Proxy mit TLS und Zugangsbeschränkung setzen,
 - keine Authentifizierung innerhalb von Modbus TCP.
 
 Diese Einschränkungen sind bewusst sichtbar dokumentiert, damit der Server nicht mit Fähigkeiten

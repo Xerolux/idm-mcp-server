@@ -4,13 +4,13 @@ build-backend = "hatchling.build"
 
 [project]
 name = "idm-heatpump-mcp"
-version = "0.2.0"
+version = "0.3.0"
 description = "Safe MCP server for IDM heat pumps built on idm-heatpump-api"
 readme = "README.md"
 requires-python = ">=3.12"
 license = {file = "LICENSE"}
 dependencies = [
-  "idm-heatpump-api[pymodbus]>=2.16.1,<3",
+  "idm-heatpump-api[pymodbus,web]>=2.16.1,<3",
   "mcp[cli]>=1.2,<2",
   "pydantic-settings>=2.6,<3",
 ]

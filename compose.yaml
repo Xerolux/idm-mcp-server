@@ -3,3 +3,9 @@ services:
     build: .
     env_file: .env
     restart: unless-stopped
+    # stdio-Modus (Standard): Ein-/Ausgabe anbinden, z. B.
+    #   docker compose run --rm -i idm-mcp
+    #
+    # Für den HTTP-Transport (IDM_TRANSPORT=http in .env) den Port freigeben:
+    # ports:
+    #   - "127.0.0.1:8308:8308"

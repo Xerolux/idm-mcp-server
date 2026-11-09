@@ -16,6 +16,16 @@ der Controller den Wert), `write_only` sind reine Trigger wie
 `error_acknowledge`. Sicherheits-, Frostschutz- und Hygieneparameter nicht ohne
 Fachbetrieb verändern.
 
+Web-Schreibaktionen (Betriebsmodus, Warmwasser-Sollwert, Quittierung, Uhrzeit)
+folgen derselben Freigabelogik über die Write-Klasse ihrer Modbus-Äquivalente –
+sie sind nicht „leichter“ zu erreichen, nur weil sie über das Web-Interface
+laufen. Das Web-Supplement benötigt die im Controller gesetzte Web-PIN; sie
+gehört nicht in Logs oder Screenshots.
+
+Betrieb mit `IDM_TRANSPORT=http`: nur an `127.0.0.1` binden (Standard) oder
+einen Reverse-Proxy mit TLS und Zugangsbeschränkung vorschalten. Der
+HTTP-Endpunkt selbst hat keine Authentifizierung.
+
 Port 502 niemals weiterleiten, Zugriffe per Firewall/VLAN beschränken und Fernzugriff nur über ein
 abgesichertes VPN erlauben. Der Server ersetzt weder die interne Regelung noch Sicherheitseinrichtungen.
 

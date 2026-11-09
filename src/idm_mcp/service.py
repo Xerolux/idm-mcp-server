@@ -22,11 +22,15 @@ from idm_heatpump import (
 )
 
 from .config import Settings
+from .web import WEB_WRITE_ACTIONS, WebSupplement
 
 _CYCLIC_NOTE = (
     "cyclic register: the controller expects the value to be rewritten at least "
     "every 300 s while the demand is active (see API docs on cyclic writes)"
 )
+
+#: Seconds before a cyclic write deadline expires at which the poller rewrites it.
+_CYCLIC_REFRESH_MARGIN = 30.0
 
 
 def _serialize_register(reg: RegisterDef) -> dict[str, Any]:
@@ -78,6 +82,17 @@ class IdmService:
         self._registers: dict[str, RegisterDef] = {}
         self._snapshot: dict[str, Any] | None = None
         self._snapshot_at: float = 0.0
+        self.web: WebSupplement | None = None
+        self._cyclic_values: dict[str, Any] = {}
+        self.poll_state: dict[str, Any] = {
+            "enabled": False,
+            "interval": 0.0,
+            "poll_count": 0,
+            "consecutive_failures": 0,
+            "last_poll_at": None,
+            "last_ok_at": None,
+            "last_error": None,
+        }
 
     # -- lifecycle -----------------------------------------------------
 
@@ -116,6 +131,7 @@ class IdmService:
         self._registers = dict(
             build_register_map(model_info, rooms_per_zone=self.settings.rooms_per_zone)
         )
+        self.web = WebSupplement(self.settings, model_info.model_name, gate=self._gate_web_write)
 
     async def detect_model(self, force: bool = False) -> dict[str, Any]:
         """Resolve the plant model (cached) or force a re-detection."""
@@ -239,6 +255,30 @@ class IdmService:
         if self.settings.writable_keys and key not in self.settings.writable_keys:
             raise PermissionError(f"datapoint {key!r} is not in the IDM_WRITABLE_KEYS allowlist")
 
+    def _gate_web_write(self, action: str) -> None:
+        """Gate a web write through the equivalent register's write class."""
+        register_key, write_class = WEB_WRITE_ACTIONS[action]
+        if not self.settings.allow_writes:
+            raise PermissionError(
+                "writes are disabled: set IDM_ALLOW_WRITES=true and configure "
+                "IDM_WRITE_CLASSES to enable controlled writes"
+            )
+        allowed = {str(item) for item in self.settings.write_classes}
+        if write_class not in allowed:
+            raise PermissionError(
+                f"web action {action!r} requires write class {write_class!r}; "
+                f"IDM_WRITE_CLASSES currently allows {sorted(allowed)}"
+            )
+        if (
+            register_key is not None
+            and self.settings.writable_keys
+            and register_key not in self.settings.writable_keys
+        ):
+            raise PermissionError(
+                f"register {register_key!r} (equivalent of {action!r}) is not in "
+                "the IDM_WRITABLE_KEYS allowlist"
+            )
+
     async def validate_write(self, key: str, value: Any) -> dict[str, Any]:
         """Simulate a write and return the encoded plan without touching the device."""
         await self.ensure_ready()
@@ -271,6 +311,9 @@ class IdmService:
             # Invalidate the snapshot so the next read reflects the device state.
             self._snapshot = None
             raise
+        if reg.write_class is WriteClass.CYCLIC:
+            # Remember the value so the poller can keep the demand alive.
+            self._cyclic_values[key] = result.requested_value
         self._snapshot = None
         return self._write_result(key, result, planned_only=False)
 
@@ -291,6 +334,53 @@ class IdmService:
             payload["note"] = _CYCLIC_NOTE
         return payload
 
+    # -- background polling ----------------------------------------------
+
+    async def poll_once(self) -> dict[str, Any]:
+        """One poller tick: refresh snapshot and maintain cyclic writes."""
+        state = self.poll_state
+        state["last_poll_at"] = time.strftime("%Y-%m-%dT%H:%M:%S%z")
+        try:
+            await self.ensure_ready()
+            await self.maintain_cyclic_writes()
+            snapshot = await self.read_all(refresh=True)
+            state["poll_count"] += 1
+            state["consecutive_failures"] = 0
+            state["last_ok_at"] = state["last_poll_at"]
+            state["last_error"] = None
+            return snapshot
+        except Exception as exc:
+            state["consecutive_failures"] += 1
+            state["last_error"] = f"{type(exc).__name__}: {exc}"
+            raise
+
+    async def maintain_cyclic_writes(self, *, margin: float = _CYCLIC_REFRESH_MARGIN) -> int:
+        """Rewrite cyclic demands nearing (or past) their TTL deadline.
+
+        Runs on the poller; values originate from writes made through this
+        server instance. Returns the number of rewrites issued.
+        """
+        if not self._cyclic_values:
+            return 0
+        now = time.monotonic()
+        due = set(self.client.get_expired_cyclic_writes())
+        for key, deadline in self.client.get_active_cyclic_writes().items():
+            if deadline - now <= margin:
+                due.add(key)
+        rewritten = 0
+        for key in sorted(due):
+            value = self._cyclic_values.get(key)
+            reg = self._registers.get(key)
+            if value is None or reg is None:
+                continue
+            try:
+                await self.client.set_value(key, value)
+            except Exception as exc:  # noqa: BLE001 - poller must never crash
+                self.poll_state["last_error"] = f"cyclic rewrite {key!r} failed: {exc}"
+                continue
+            rewritten += 1
+        return rewritten
+
     # -- diagnostics ----------------------------------------------------
 
     async def diagnostics(self) -> dict[str, Any]:
@@ -304,8 +394,11 @@ class IdmService:
         payload["unsupported_registers"] = list(self.client.get_unsupported_registers())
         payload["active_cyclic_writes"] = self.client.get_active_cyclic_writes()
         payload["expired_cyclic_writes"] = sorted(self.client.get_expired_cyclic_writes())
+        payload["maintained_cyclic_values"] = dict(self._cyclic_values)
         payload["model"] = self.model()
         payload["datapoint_count"] = len(self._registers)
+        if self.web is not None:
+            payload["web"] = await self.web.status()
         return payload
 
     # -- error codes ----------------------------------------------------

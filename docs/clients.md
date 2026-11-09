@@ -174,6 +174,30 @@ Nicht ungeprüft von einer beliebigen Oberfläche auf MCP-Unterstützung schlie�
 Dokumentation des konkret verwendeten Z.ai-Clients nach `MCP`, `stdio` und `local server` suchen. Bei
 einer reinen Weboberfläche gelten dieselben Remote- und Sicherheitshinweise wie für ChatGPT.
 
+## HTTP-Transport statt stdio
+
+Für Container-, Server- oder LAN-Betrieb kann der Server als Streamable-HTTP-Endpunkt laufen
+statt als lokaler `stdio`-Prozess:
+
+```bash
+IDM_TRANSPORT=http IDM_HTTP_PORT=8308 idm-mcp
+# Endpunkt: http://127.0.0.1:8308/mcp
+```
+
+Schnelltest:
+
+```bash
+curl -s http://127.0.0.1:8308/mcp -H "Content-Type: application/json" \
+  -d '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-06-18","capabilities":{},"clientInfo":{"name":"curl","version":"0"}}}'
+```
+
+Der Standard bindet bewusst an `127.0.0.1`. Clients, die Remote-MCP-URLs unterstützen
+(Claude Desktop mit Connectors, ChatGPT Desktop u. a.), brauchen eine über HTTPS erreichbare,
+authentifizierte URL: den Server dazu hinter einen Reverse-Proxy mit TLS und
+Zugangsbeschränkung setzen und per `IDM_HTTP_HOST` nur auf die Proxy-Gegenstelle binden.
+Der Endpunkt selbst hat keine eigene Authentifizierung – niemals direkt ins LAN oder Internet
+exponieren, und den Modbus-Port der Wärmepumpe schon gar nicht.
+
 ## Funktion prüfen
 
 Nach der Einrichtung in jedem Client in dieser Reihenfolge testen:

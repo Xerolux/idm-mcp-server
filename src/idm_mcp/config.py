@@ -8,7 +8,7 @@ or via an ``.env`` file. Comma-separated lists are accepted for
 from __future__ import annotations
 
 from functools import lru_cache
-from typing import Annotated
+from typing import Annotated, Literal
 
 from pydantic import Field, field_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -70,6 +70,23 @@ class Settings(BaseSettings):
     # Seconds a read_all snapshot stays cached (0 disables caching).
     cache_ttl: float = Field(5.0, ge=0, le=3600)
 
+    # Background polling: seconds between snapshot refreshes (0 = off).
+    # The poller also keeps cyclic writes alive before their TTL expires.
+    poll_interval: float = Field(0.0, ge=0, le=3600)
+
+    # Optional local web supplement (Navigator 10 WebSocket / Navigator 2.0
+    # HTTP): requires the web PIN set in the controller. Empty variant =
+    # derive from the detected model ("nav10" for Navigator 10/Pro,
+    # "nav20" for Navigator 2.0); "off" disables the supplement.
+    web_pin: str = ""
+    web_port: int = Field(61220, ge=1, le=65535)
+    web_variant: str = ""
+
+    # MCP transport: "stdio" (default) or "http" (streamable HTTP server).
+    transport: Literal["stdio", "http"] = "stdio"
+    http_host: str = "127.0.0.1"
+    http_port: int = Field(8308, ge=1, le=65535)
+
     @field_validator("model")
     @classmethod
     def _normalize_model(cls, value: str) -> str:
@@ -91,6 +108,14 @@ class Settings(BaseSettings):
                 f"invalid write classes {invalid}; choose from {sorted(VALID_WRITE_CLASSES)}"
             )
         return value
+
+    @field_validator("web_variant")
+    @classmethod
+    def _validate_web_variant(cls, value: str) -> str:
+        normalized = value.strip().lower()
+        if normalized not in {"", "auto", "nav10", "nav20", "off"}:
+            raise ValueError("web_variant must be one of auto, nav10, nav20, off")
+        return normalized
 
     @field_validator("heating_circuits", mode="before")
     @classmethod
