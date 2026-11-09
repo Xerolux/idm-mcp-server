@@ -31,6 +31,9 @@ WEB_WRITE_ACTIONS: dict[str, tuple[str | None, str]] = {
     "save_dhw_setpoint": ("dhw_setpoint", "eeprom"),
     "acknowledge_notifications": ("error_acknowledge", "write_only"),
     "set_datetime": (None, "volatile"),
+    # Heating-circuit parameters (room setpoints, curves) are per-circuit
+    # EEPROM settings without a single equivalent register name.
+    "save_heatingcircuit_parameter": (None, "eeprom"),
 }
 
 #: model name -> web client variant (mirrors idm-heatpump-hass).
@@ -181,6 +184,77 @@ class WebSupplement:
             ],
         }
 
+    async def read_heating_circuit(self, hc_id: str) -> dict[str, Any]:
+        """Read one heating circuit's web state incl. device-declared ranges."""
+        client = self._require_client("read_heating_circuit")
+        circuit = await client.read_heatingcircuit(hc_id)
+
+        def render_value(value: Any) -> dict[str, Any] | None:
+            if value is None:
+                return None
+            return {
+                "parameter_id": value.parameter_id,
+                "value": value.value,
+                "min": value.min_value,
+                "max": value.max_value,
+                "increment": value.increment,
+            }
+
+        return {
+            "hc_id": circuit.hc_id,
+            "display_name": circuit.display_name,
+            "mode": {
+                "value": circuit.mode_value,
+                "parameter_id": circuit.mode_parameter_id,
+                "options": [
+                    {"key": choice.key, "name": choice.name} for choice in circuit.mode_options
+                ],
+            },
+            "setpoint_normal": render_value(circuit.setpoint_normal),
+            "setpoint_eco": render_value(circuit.setpoint_eco),
+            "room_temperature": circuit.room_temperature,
+            "flow_setpoint": circuit.flow_setpoint,
+            "pump_active": circuit.pump_active,
+            "available_circuits": [ref.hc_id for ref in circuit.available_circuits],
+        }
+
+    async def read_weather(self) -> dict[str, Any]:
+        """Read the controller-side weather forecast (Navigator 10 web)."""
+        client = self._require_client("read_weather")
+        detail = await client.read_weather()
+
+        def render_day(day: Any) -> dict[str, Any]:
+            return {
+                "date": day.date,
+                "day_of_week": day.day_of_week,
+                "cloud_cover": day.cloud_cover,
+                "rain_probability": day.rain_probability,
+                "sun_seconds": day.sun_seconds,
+                "symbol": day.symbol,
+                "temperature": day.temperature,
+                "temperature_min": day.temperature_min,
+                "temperature_max": day.temperature_max,
+                "temperature_avg_label": day.temperature_avg_label,
+                "wind_speed_min": day.wind_speed_min,
+                "wind_speed_max": day.wind_speed_max,
+            }
+
+        return {
+            "today": render_day(detail.today) if detail.today else None,
+            "forecasts": [render_day(day) for day in detail.forecasts],
+        }
+
+    async def read_energyflow(self) -> dict[str, Any]:
+        """Read the instantaneous energy-flow powers (Navigator 10 web)."""
+        client = self._require_client("read_energyflow")
+        flow = await client.read_energyflow()
+        return {
+            "grid_power": flow.grid_power,
+            "pv_power": flow.pv_power,
+            "house_power": flow.house_power,
+            "signal": flow.signal,
+        }
+
     # -- writes (gated) -------------------------------------------------
 
     async def set_system_mode(self, mode: int) -> dict[str, Any]:
@@ -192,6 +266,33 @@ class WebSupplement:
         client = self._gated_client("save_dhw_setpoint")
         await client.save_dhw_setpoint(float(celsius))
         return {"action": "save_dhw_setpoint", "value": float(celsius), "path": "web"}
+
+    async def save_heatingcircuit_parameter(
+        self,
+        parameter_id: str,
+        value: float,
+        *,
+        min_value: float | None = None,
+        max_value: float | None = None,
+    ) -> dict[str, Any]:
+        """Write one heating-circuit web parameter (e.g. HKD04 room setpoint).
+
+        Bounds should come from read_web_heating_circuit; when given, they are
+        enforced client-side in addition to the device's own validation.
+        """
+        client = self._gated_client("save_heatingcircuit_parameter")
+        clean_id = str(parameter_id).strip()
+        if not clean_id:
+            raise ValueError("parameter_id must not be empty (e.g. HKD04)")
+        await client.save_heatingcircuit_parameter(
+            clean_id, value, min_value=min_value, max_value=max_value
+        )
+        return {
+            "action": "save_heatingcircuit_parameter",
+            "parameter_id": clean_id,
+            "value": value,
+            "path": "web",
+        }
 
     async def acknowledge_notifications(
         self, code: str = "", *, remind_me_later: bool = False

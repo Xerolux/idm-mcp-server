@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "idm-heatpump-mcp"
-version = "0.3.0"
+version = "0.4.0"
 description = "Safe MCP server for IDM heat pumps built on idm-heatpump-api"
 readme = "README.md"
 requires-python = ">=3.12"

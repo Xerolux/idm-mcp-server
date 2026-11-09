@@ -117,6 +117,12 @@ async def read_datapoint(key: str) -> str:
 
 
 @mcp.tool()
+async def read_datapoints(keys: list[str]) -> str:
+    """Read several datapoints in one batch, e.g. ["outdoor_temp", "storage_temp"]."""
+    return _dump(await service().read_datapoints(keys))
+
+
+@mcp.tool()
 async def read_all_datapoints(refresh: bool = False) -> str:
     """Read every readable datapoint in one batch (cached for a few seconds).
 
@@ -182,6 +188,56 @@ async def read_web_notifications() -> str:
     """
     supplement = await web()
     return _dump(await supplement.read_notifications())
+
+
+@mcp.tool()
+async def read_web_heating_circuit(hc_id: str) -> str:
+    """Read one heating circuit's web state with device-declared ranges.
+
+    Returns operating mode (with the controller's option list), normal/eco
+    room setpoints incl. min/max, room temperature, flow setpoint and pump
+    state. hc_id is a letter like "A".
+    """
+    supplement = await web()
+    return _dump(await supplement.read_heating_circuit(hc_id))
+
+
+@mcp.tool()
+async def read_web_weather() -> str:
+    """Read the controller-side weather forecast (Navigator 10 web).
+
+    Today plus up to six forecast days as served by the controller's own
+    myiDM forecast.
+    """
+    supplement = await web()
+    return _dump(await supplement.read_weather())
+
+
+@mcp.tool()
+async def read_web_energyflow() -> str:
+    """Read instantaneous power flows: grid, PV and house (Navigator 10 web)."""
+    supplement = await web()
+    return _dump(await supplement.read_energyflow())
+
+
+@mcp.tool()
+async def web_save_heatingcircuit_parameter(
+    parameter_id: str,
+    value: float,
+    min_value: float | None = None,
+    max_value: float | None = None,
+) -> str:
+    """Write one heating-circuit web parameter (Navigator 10), e.g. HKD04.
+
+    parameter_id follows the HK<x>NN scheme (read_web_heating_circuit shows
+    the ids with device-declared ranges). Requires write class "eeprom".
+    """
+    supplement = await web()
+    return _dump(
+        await supplement.save_heatingcircuit_parameter(
+            parameter_id, value, min_value=min_value, max_value=max_value
+        )
+    )
 
 
 @mcp.tool()
@@ -274,6 +330,58 @@ async def web_resource() -> str:
 # -- entry point ------------------------------------------------------------
 
 
+class BearerAuthMiddleware:
+    """Minimal ASGI middleware requiring a static bearer token."""
+
+    def __init__(self, app: Any, token: str) -> None:
+        self._app = app
+        self._token = token.encode()
+
+    async def __call__(self, scope: dict, receive: Any, send: Any) -> None:
+        if scope["type"] == "http":
+            headers = {key.lower(): value for key, value in scope.get("headers", [])}
+            provided = headers.get(b"authorization", b"")
+            expected = b"Bearer " + self._token
+            # Constant-time comparison to avoid token probing.
+            import hmac
+
+            if not hmac.compare_digest(provided, expected):
+                await send(
+                    {
+                        "type": "http.response.start",
+                        "status": 401,
+                        "headers": [
+                            (b"www-authenticate", b"Bearer"),
+                            (b"content-type", b"application/json"),
+                        ],
+                    }
+                )
+                await send(
+                    {
+                        "type": "http.response.body",
+                        "body": b'{"error":"unauthorized"}',
+                    }
+                )
+                return
+        await self._app(scope, receive, send)
+
+
+async def _run_http(server: FastMCP, settings: Any) -> None:  # pragma: no cover
+    """Serve streamable HTTP, optionally behind the bearer-token check."""
+    import uvicorn
+
+    app = server.streamable_http_app()
+    if settings.http_token:
+        app = BearerAuthMiddleware(app, settings.http_token)  # type: ignore[assignment]
+    config = uvicorn.Config(
+        app,
+        host=settings.http_host,
+        port=settings.http_port,
+        log_level=server.settings.log_level.lower(),
+    )
+    await uvicorn.Server(config).serve()
+
+
 def _apply_http_settings(server: FastMCP, settings: Any) -> None:
     """Configure the streamable-HTTP bind address on a FastMCP instance."""
     server.settings.host = settings.http_host
@@ -284,7 +392,9 @@ def main() -> None:
     settings = get_settings()
     if settings.transport == "http":
         _apply_http_settings(mcp, settings)
-        mcp.run(transport="streamable-http")
+        import asyncio
+
+        asyncio.run(_run_http(mcp, settings))
     else:
         mcp.run(transport="stdio")
 

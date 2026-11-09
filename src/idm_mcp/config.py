@@ -82,10 +82,12 @@ class Settings(BaseSettings):
     web_port: int = Field(61220, ge=1, le=65535)
     web_variant: str = ""
 
-    # MCP transport: "stdio" (default) or "http" (streamable HTTP server).
+    # Optional HTTP transport: "stdio" (default) or "http" (streamable HTTP
+    # server). IDM_HTTP_TOKEN adds a static bearer-token check when set.
     transport: Literal["stdio", "http"] = "stdio"
     http_host: str = "127.0.0.1"
     http_port: int = Field(8308, ge=1, le=65535)
+    http_token: str = ""
 
     @field_validator("model")
     @classmethod

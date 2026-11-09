@@ -24,7 +24,9 @@ gehört nicht in Logs oder Screenshots.
 
 Betrieb mit `IDM_TRANSPORT=http`: nur an `127.0.0.1` binden (Standard) oder
 einen Reverse-Proxy mit TLS und Zugangsbeschränkung vorschalten. Der
-HTTP-Endpunkt selbst hat keine Authentifizierung.
+HTTP-Endpunkt selbst hat keine Authentifizierung – ein statischer
+Bearer-Token (`IDM_HTTP_TOKEN`) ist eine Mindestabsicherung, ersetzt aber
+keine TLS-Terminierung.
 
 Port 502 niemals weiterleiten, Zugriffe per Firewall/VLAN beschränken und Fernzugriff nur über ein
 abgesichertes VPN erlauben. Der Server ersetzt weder die interne Regelung noch Sicherheitseinrichtungen.

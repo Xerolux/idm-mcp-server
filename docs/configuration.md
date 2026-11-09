@@ -77,6 +77,7 @@ Web-Schreibaktionen laufen durch dieselbe Freigabe wie ihre Modbus-Äquivalente:
 |---|---|---|
 | `web_set_system_mode` | `system_mode` | `eeprom` |
 | `web_save_dhw_setpoint` | `dhw_setpoint` | `eeprom` |
+| `web_save_heatingcircuit_parameter` | – (pro Kreis, z. B. `HKA04`) | `eeprom` |
 | `web_acknowledge_notifications` | `error_acknowledge` | `write_only` |
 | `web_set_datetime` | – (Uhrzeit, flüchtig) | `volatile` |
 
@@ -87,8 +88,10 @@ Web-Schreibaktionen laufen durch dieselbe Freigabe wie ihre Modbus-Äquivalente:
 | `IDM_TRANSPORT` | `stdio` | `stdio` für lokale Clients oder `http` für einen Streamable-HTTP-Server |
 | `IDM_HTTP_HOST` | `127.0.0.1` | Bind-Adresse im HTTP-Modus |
 | `IDM_HTTP_PORT` | `8308` | Port im HTTP-Modus (Pfad `/mcp`) |
+| `IDM_HTTP_TOKEN` | leer | Statischer Bearer-Token; gesetzt = jede HTTP-Anfrage muss `Authorization: Bearer <Token>` liefern |
 
 Der HTTP-Modus bringt keine eigene Authentifizierung mit. Standardmäßig wird nur die lokale
-Loopback-Adresse gebunden; für Zugriff aus dem LAN einen Reverse-Proxy mit TLS und
+Loopback-Adresse gebunden; mit `IDM_HTTP_TOKEN` lässt sich ein statischer Zugriffsschutz
+aktivieren. Für Zugriff aus dem LAN zusätzlich einen Reverse-Proxy mit TLS und
 Zugangsbeschränkung vorschalten. Den Modbus-Port der Wärmepumpe und das ungeschützte
 HTTP-Interface niemals direkt exponieren.

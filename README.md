@@ -73,7 +73,11 @@ keine Diagramme und ersetzt weder Home Assistant noch `idm-heatpump-api` selbst.
   GLT-Anforderungen (`cyclic`-Register) vor Ablauf ihrer TTL am Leben.
 - **Zwei Transporte:** lokales `stdio` (Standard) oder Streamable-HTTP (`IDM_TRANSPORT=http`,
   bindet standardmäßig an `127.0.0.1`) – etwa für Container- oder LAN-Betrieb hinter einem
-  abgesicherten Reverse-Proxy.
+  abgesicherten Reverse-Proxy. Ein optionaler statischer Bearer-Token (`IDM_HTTP_TOKEN`)
+  schützt den HTTP-Endpunkt zusätzlich ab.
+- **An realer Anlage verifiziert:** Modellerkennung (Navigator 10 mit Solar/ISC/PV und
+  nicht zusammenhängenden Heizkreisen), Voll-Snapshot und Diagnose sind gegen eine echte
+  Anlage getestet.
 - **Lokal bleiben:** Die Verbindung zur Wärmepumpe erfolgt aus dem eigenen Netzwerk; der Server
   benötigt keinen Cloud-Zugang.
 
@@ -84,6 +88,7 @@ keine Diagramme und ersetzt weder Home Assistant noch `idm-heatpump-api` selbst.
 | `detect_model` | Controller-Modell und Anlagenstruktur erkennen | „Erkenne meine Wärmepumpe.“ |
 | `list_datapoints` | Datenpunkte mit Metadaten anzeigen (filterbar) | „Welche Werte gibt es zum Warmwasser?“ |
 | `read_datapoint` | Aktuellen Wert eines Datenpunkts lesen | „Lies `outdoor_temp` aus.“ |
+| `read_datapoints` | Mehrere Datenpunkte in einem Batch lesen | „Lies Außentemp., Speicher und Vorlauf.“ |
 | `read_all_datapoints` | Kompletten Anlagen-Snapshot lesen | „Gib mir alle aktuellen Werte.“ |
 | `validate_write` | Schreibplan prüfen, ohne zu schreiben | „Wäre 52 °C Warmwasser erlaubt?“ |
 | `write_datapoint` | Freigegebenen Wert setzen (Default: gesperrt) | „Setze `dhw_setpoint` auf 52.“ |
@@ -91,8 +96,12 @@ keine Diagramme und ersetzt weder Home Assistant noch `idm-heatpump-api` selbst.
 | `get_diagnostics` | Verbindungs- und Registerdiagnose | „Welche Register schlagen fehl?“ |
 | `read_web_data` | Lokales Web-Interface auslesen (Softwarestand, Modell, Infosystem) | „Welche Firmware hat der Navigator?“ |
 | `read_web_notifications` | Aktive Störungen mit Klartext (Navigator 10) | „Welche Meldungen liegen an?“ |
+| `read_web_heating_circuit` | Heizkreis-Status mit geräteseitigen Grenzen | „Zeige Heizkreis A mit Sollwerten.“ |
+| `read_web_weather` | Controller-eigene Wettervorhersage (myiDM) | „Was sagt die Vorhersage für morgen?“ |
+| `read_web_energyflow` | Momentanleistungen Netz/PV/Haus | „Wie viel PV-Überschuss ist da?“ |
 | `web_set_system_mode` | Betriebsmodus per Web setzen (0–5) | „Stelle auf Nur-Warmwasser.“ |
 | `web_save_dhw_setpoint` | Warmwasser-Sollwert per Web setzen | „Setze Warmwasser auf 52 °C.“ |
+| `web_save_heatingcircuit_parameter` | Heizkreis-Parameter per Web setzen (`HK<x>NN`) | „Raumsoll HK A auf 21,5 °C.“ |
 | `web_acknowledge_notifications` | Störungen per Web quittieren | „Quittiere alle Meldungen.“ |
 | `web_set_datetime` | Controller-Uhr stellen | „Synchronisiere die Uhr.“ |
 

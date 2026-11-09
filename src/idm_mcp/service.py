@@ -197,6 +197,32 @@ class IdmService:
             result["unused"] = True
         return result
 
+    async def read_datapoints(self, keys: list[str]) -> dict[str, Any]:
+        """Read several datapoints in one batch (fail on unknown keys)."""
+        await self.ensure_ready()
+        if not keys:
+            raise ValueError("keys must not be empty")
+        regs = [self._require_register(key) for key in keys]
+        write_only = [r.name for r in regs if r.write_only]
+        if write_only:
+            raise ValueError(f"write-only datapoints cannot be read: {write_only}")
+        values = await self.client.read_batch(regs)
+        rendered: dict[str, Any] = {}
+        for key, value in values.items():
+            reg = self._registers[key]
+            entry: dict[str, Any] = {"value": value}
+            if reg.unit:
+                entry["unit"] = reg.unit
+            if reg.enum_options is not None and isinstance(value, int):
+                entry["enum"] = reg.enum_options.get(value)
+            rendered[key] = entry
+        return {
+            "model": self.model(),
+            "requested": len(keys),
+            "value_count": len(rendered),
+            "values": rendered,
+        }
+
     async def read_all(self, *, refresh: bool = False) -> dict[str, Any]:
         """Batch-read every readable datapoint (cached for cache_ttl seconds)."""
         await self.ensure_ready()

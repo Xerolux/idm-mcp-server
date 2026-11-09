@@ -44,3 +44,49 @@ def test_apply_http_settings_binds_configured_address():
         assert mcp.settings.port == 9999
     finally:
         mcp.settings.host, mcp.settings.port = original
+
+
+async def test_bearer_auth_middleware_rejects_and_accepts():
+    from idm_mcp.server import BearerAuthMiddleware
+
+    class Recorder:
+        def __init__(self) -> None:
+            self.calls: list[str] = []
+
+        async def __call__(self, scope, receive, send):
+            self.calls.append(scope["type"])
+
+    inner = Recorder()
+    middleware = BearerAuthMiddleware(inner, "secret-token")
+
+    async def call_http(auth_header: bytes | None) -> tuple[int, list[dict]]:
+        headers = [] if auth_header is None else [(b"authorization", auth_header)]
+        responses: list[dict] = []
+
+        async def receive():  # pragma: no cover - unused
+            return {}
+
+        async def send(message):
+            responses.append(message)
+
+        await middleware({"type": "http", "headers": headers}, receive, send)
+        status = next((m["status"] for m in responses if m["type"] == "http.response.start"), 200)
+        return status, responses
+
+    status, _ = await call_http(None)
+    assert status == 401
+    status, _ = await call_http(b"Bearer wrong")
+    assert status == 401
+    status, _ = await call_http(b"Bearer secret-token")
+    assert status == 200
+    assert inner.calls == ["http"]
+
+    # Non-HTTP scopes (lifespan) pass through untouched.
+    await middleware({"type": "lifespan", "headers": []}, None, None)
+    assert inner.calls == ["http", "lifespan"]
+
+
+def test_http_token_setting_parsed(monkeypatch):
+    assert Settings(host="hp", _env_file=None).http_token == ""
+    monkeypatch.setenv("IDM_HTTP_TOKEN", "abc123")
+    assert Settings(host="hp", _env_file=None).http_token == "abc123"

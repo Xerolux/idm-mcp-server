@@ -165,6 +165,67 @@ class FakeWebClient:
     async def set_datetime(self, value: object) -> None:
         self._record("set_datetime", value)
 
+    async def read_heatingcircuit(self, hc_id: str) -> object:
+        from idm_heatpump.web import (
+            IdmWebHeatingCircuit,
+            IdmWebHeatingCircuitChoice,
+            IdmWebHeatingCircuitRef,
+            IdmWebHeatingCircuitValue,
+        )
+
+        self._record("read_heatingcircuit", hc_id)
+        return IdmWebHeatingCircuit(
+            hc_id=hc_id.upper(),
+            display_name="Heizkreis A",
+            mode_value=1,
+            mode_parameter_id="HKA00",
+            mode_options=(
+                IdmWebHeatingCircuitChoice(key=0, name="Aus"),
+                IdmWebHeatingCircuitChoice(key=1, name="Automatik"),
+            ),
+            setpoint_normal=IdmWebHeatingCircuitValue(
+                parameter_id="HKA04", value=21.0, min_value=5.0, max_value=28.0
+            ),
+            setpoint_eco=IdmWebHeatingCircuitValue(
+                parameter_id="HKA05", value=17.0, min_value=5.0, max_value=28.0
+            ),
+            room_temperature=21.4,
+            flow_setpoint=34.0,
+            pump_active=True,
+            available_circuits=(IdmWebHeatingCircuitRef(hc_id="A"),),
+        )
+
+    async def read_weather(self) -> object:
+        from idm_heatpump.web import IdmWebWeatherDay, IdmWebWeatherDetail
+
+        self._record("read_weather")
+        return IdmWebWeatherDetail(
+            today=IdmWebWeatherDay(date="2026-11-09", temperature=12.0, temperature_min=7.0),
+            forecasts=(IdmWebWeatherDay(date="2026-11-10", temperature=9.0),),
+        )
+
+    async def read_energyflow(self) -> object:
+        from idm_heatpump.web import IdmWebEnergyflow
+
+        self._record("read_energyflow")
+        return IdmWebEnergyflow(grid_power=-1200.0, pv_power=2400.0, house_power=None)
+
+    async def save_heatingcircuit_parameter(
+        self,
+        parameter_id: str,
+        value: float,
+        *,
+        min_value: float | None = None,
+        max_value: float | None = None,
+    ) -> None:
+        self._record(
+            "save_heatingcircuit_parameter",
+            parameter_id,
+            value,
+            min_value=min_value,
+            max_value=max_value,
+        )
+
     async def close(self) -> None:
         self.closed = True
 
