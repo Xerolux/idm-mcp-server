@@ -16,26 +16,23 @@ Zuerst die [Installation](installation.md) abschließen. Anschließend absolute 
 cd /pfad/zu/idm-mcp-server
 pwd
 realpath .venv/bin/idm-mcp
-realpath config/registers.json
 ```
 
 Unter Windows beispielsweise:
 
 ```powershell
 (Resolve-Path .venv\Scripts\idm-mcp.exe).Path
-(Resolve-Path config\registers.json).Path
 ```
 
-In den Beispielen müssen diese drei Platzhalter ersetzt werden:
+In den Beispielen müssen diese Platzhalter ersetzt werden:
 
 | Platzhalter | Beispiel |
 |---|---|
 | `<IDM-MCP>` | `/home/user/idm-mcp-server/.venv/bin/idm-mcp` |
-| `<REGISTERDATEI>` | `/home/user/idm-mcp-server/config/registers.json` |
 | `<WÄRMEPUMPE>` | `192.168.1.50` |
 
-Der Client muss im selben LAN bzw. VPN wie die Wärmepumpe laufen. Zum Einstieg bleiben
-`IDM_ALLOW_WRITES` und `IDM_WRITABLE_ADDRESSES` absichtlich ungesetzt.
+Der Client muss im selben LAN bzw. VPN wie die Wärmepumpe laufen. Zum Einstieg bleibt
+`IDM_ALLOW_WRITES` absichtlich ungesetzt.
 
 ## Claude Desktop
 
@@ -56,8 +53,7 @@ Bestehende `mcpServers`-Einträge nicht überschreiben, sondern den neuen Eintra
       "env": {
         "IDM_HOST": "<WÄRMEPUMPE>",
         "IDM_PORT": "502",
-        "IDM_UNIT_ID": "1",
-        "IDM_REGISTER_MAP": "<REGISTERDATEI>",
+        "IDM_SLAVE_ID": "1",
         "IDM_ALLOW_WRITES": "false"
       }
     }
@@ -66,8 +62,9 @@ Bestehende `mcpServers`-Einträge nicht überschreiben, sondern den neuen Eintra
 ```
 
 Claude Desktop vollständig beenden und neu starten. In den Einstellungen bzw. im Tool-Menü prüfen,
-ob `idm-heatpump` und die Tools `list_entities`, `read_entity` und `write_entity` erscheinen. Zuerst
-`list_entities` ausführen und danach ausschließlich ein verifiziertes Lese-Entity testen.
+ob `idm-heatpump` und die Tools `detect_model`, `list_datapoints`, `read_datapoint` und
+`write_datapoint` erscheinen. Zuerst `detect_model` und danach `read_datapoint` für einen
+Messwert (z. B. `outdoor_temp`) testen.
 
 ## Claude Code
 
@@ -83,7 +80,6 @@ Schema angelegt werden:
       "args": [],
       "env": {
         "IDM_HOST": "<WÄRMEPUMPE>",
-        "IDM_REGISTER_MAP": "<REGISTERDATEI>",
         "IDM_ALLOW_WRITES": "false"
       }
     }
@@ -107,8 +103,7 @@ args = []
 [mcp_servers.idm-heatpump.env]
 IDM_HOST = "<WÄRMEPUMPE>"
 IDM_PORT = "502"
-IDM_UNIT_ID = "1"
-IDM_REGISTER_MAP = "<REGISTERDATEI>"
+IDM_SLAVE_ID = "1"
 IDM_ALLOW_WRITES = "false"
 ```
 
@@ -148,7 +143,6 @@ eine `.vscode/mcp.json` angelegt werden:
       "args": [],
       "env": {
         "IDM_HOST": "<WÄRMEPUMPE>",
-        "IDM_REGISTER_MAP": "<REGISTERDATEI>",
         "IDM_ALLOW_WRITES": "false"
       }
     }
@@ -185,10 +179,10 @@ einer reinen Weboberfläche gelten dieselben Remote- und Sicherheitshinweise wie
 Nach der Einrichtung in jedem Client in dieser Reihenfolge testen:
 
 1. Ist der Serverstatus verbunden bzw. grün?
-2. Liefert `list_entities` die erwartete lokale Konfiguration?
-3. Liefert `read_entity` für **ein verifiziertes** Register einen plausiblen Wert?
+2. Liefert `detect_model` die erwartete Anlage (Modell, Heizkreise)?
+3. Liefert `read_datapoint` für **einen Messwert** (z. B. `outdoor_temp`) einen plausiblen Wert?
 4. Bleibt ein Schreibversuch mit `writes are disabled` gesperrt?
 
 Wenn der Server nicht startet, zunächst `<IDM-MCP>` im Terminal ausführen. Bei `IDM_HOST is not
-configured` fehlt die Umgebungsvariable; bei Verbindungsfehlern Netzwerk, Port, Unit-ID und die
+configured` fehlt die Umgebungsvariable; bei Verbindungsfehlern Netzwerk, Port, Slave-ID und die
 Modbus-Freigabe der Wärmepumpe kontrollieren.

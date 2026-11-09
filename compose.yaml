@@ -2,6 +2,4 @@ services:
   idm-mcp:
     build: .
     env_file: .env
-    volumes:
-      - ./config:/config:ro
     restart: unless-stopped

@@ -6,6 +6,6 @@
 4. [Sicherer Betrieb](safety.md)
 5. [Haftungs- und Markenhinweis](../DISCLAIMER.md)
 
-Der Server verbindet einen MCP-Client über Modbus TCP mit einer IDM-Wärmepumpe. Die Register werden
-lokal und gerätespezifisch konfiguriert. Das Projekt steht in keiner Verbindung zur iDM
-Energiesysteme GmbH.
+Der Server verbindet einen MCP-Client über Modbus TCP mit einer IDM-Wärmepumpe. Registerkarte und
+Modell-Erkennung stammen aus [idm-heatpump-api](https://github.com/Xerolux/idm-heatpump-api). Das
+Projekt steht in keiner Verbindung zur iDM Energiesysteme GmbH.

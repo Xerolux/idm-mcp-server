@@ -2,10 +2,12 @@
 
 ## Voraussetzungen
 
-- Python 3.11 oder neuer
+- Python 3.12 oder neuer
 - Netzwerkzugriff und aktiviertes Modbus TCP an der Wärmepumpe
-- für das konkrete Modell verifizierte Registeradressen
 - ein MCP-Client mit Unterstützung für lokale `stdio`-Server
+
+Die Registerkarte und Modell-Erkennung bringt [idm-heatpump-api](https://github.com/Xerolux/idm-heatpump-api)
+mit; eigene Registeradressen müssen nicht mehr gepflegt werden.
 
 ## Python
 
@@ -17,11 +19,11 @@ source .venv/bin/activate
 python -m pip install --upgrade pip
 pip install .
 cp .env.example .env
-cp config/registers.example.json config/registers.json
 ```
 
 Unter Windows PowerShell lautet die Aktivierung `.venv\Scripts\Activate.ps1`. Danach in `.env`
-mindestens `IDM_HOST` und `IDM_REGISTER_MAP` setzen und die Beispielregister ersetzen.
+mindestens `IDM_HOST` setzen. Modell und Registerkarte werden beim ersten Verbindungsaufbau
+automatisch erkannt (`detect_model`).
 
 ```bash
 idm-mcp

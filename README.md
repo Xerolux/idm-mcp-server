@@ -1,9 +1,9 @@
 # IDM Heat Pump MCP Server
 
 Ein unabhängiger Model Context Protocol (MCP)-Server, der KI-Assistenten kontrollierten Zugriff auf
-eine IDM-Wärmepumpe über Modbus TCP ermöglicht. Damit können kompatible MCP-Clients konfigurierte
-Anlagenwerte abfragen, verständlich anzeigen und – nur nach ausdrücklicher Freigabe – ausgewählte
-Sollwerte schreiben.
+eine IDM-Wärmepumpe über Modbus TCP ermöglicht. Damit können kompatible MCP-Clients Anlagenwerte
+abfragen, verständlich anzeigen und – nur nach ausdrücklicher Freigabe – ausgewählte Sollwerte
+schreiben.
 
 > [!IMPORTANT]
 > Dieses Community-Projekt steht in **keiner Verbindung, Partnerschaft oder Beauftragung mit der
@@ -22,42 +22,47 @@ Brücke zwischen beiden Welten:
 MCP-Client / KI-Assistent
           │ lokales MCP über stdio
           ▼
-   IDM Heat Pump MCP Server
-          │ Modbus TCP im lokalen Netz
+    IDM Heat Pump MCP Server
+          │ idm-heatpump-api (Modbus TCP im lokalen Netz)
           ▼
-       IDM-Wärmepumpe
+        IDM-Wärmepumpe
 ```
 
-Der Server übersetzt sprechende Namen wie `heating.outside_temperature` in die für das jeweilige
-Gerät konfigurierte Modbus-Adresse, liest den Rohwert und rechnet ihn mit Datentyp, Skalierung,
-Offset und Einheit in einen verständlichen Wert um. Dadurch muss der KI-Assistent weder
-Registeradressen kennen noch selbst Binärwerte interpretieren.
+Der Server übersetzt sprechende Namen wie `outdoor_temp` oder `hc_a_flow_temp` in Modbus-Zugriffe,
+dekodiert Werte inklusive Einheit, Enumeration und Skalierung und stellt sie als MCP-Tools und
+MCP-Resources bereit. Die komplette Registerkarte (je nach Anlage 100–600 Datenpunkte) und die
+automatische Modell-Erkennung stammen aus der Bibliothek
+[idm-heatpump-api](https://github.com/Xerolux/idm-heatpump-api), die auch die Home-Assistant-
+Integration [idm-heatpump-hass](https://github.com/Xerolux/idm-heatpump-hass) verwendet – beide
+pflegen damit dieselbe, an realen Anlagen verifizierte Registerdatenbasis.
 
 Typische Anwendungsfälle sind:
 
-- aktuelle, konfigurierte Betriebswerte in natürlicher Sprache abfragen,
-- Temperaturen oder andere einzelne Messwerte auslesen,
-- einem KI-Assistenten die verfügbaren Werte samt Einheit und Beschreibung zeigen,
-- Diagnosegespräche mit aktuellen Anlagendaten unterstützen und
-- nach bewusster Freigabe einzelne, geprüfte Sollwerte innerhalb definierter Grenzen ändern.
+- aktuelle Betriebswerte in natürlicher Sprache abfragen („Wie warm ist der Puffer?“),
+- einen vollständigen Anlagen-Snapshot mit einem Aufruf lesen (`read_all_datapoints`),
+- einem KI-Assistenten die verfügbaren Werte samt Einheit, Grenzen und Write-Klasse zeigen,
+- Diagnosegespräche mit aktuellen Anlagendaten und Fehlercode-Erklärungen unterstützen und
+- nach bewusster, mehrstufiger Freigabe einzelne Sollwerte ändern – mit trockener Vorprüfung.
 
 Der Server ist **kein dauerhaftes Monitoring-System**: Er speichert keine Messhistorie, erstellt
-keine Diagramme und ersetzt weder Home Assistant noch `idm-heatpump-api`. Er stellt ausschließlich
-die in der lokalen Registerdatei definierten Werte als MCP-Tools und MCP-Resources bereit.
+keine Diagramme und ersetzt weder Home Assistant noch `idm-heatpump-api` selbst.
 
 ## Was kann der Server?
 
-- **Entities auflisten:** Namen, Adressen, Einheiten, Beschreibungen und Schreibregeln anzeigen.
-- **Live-Werte lesen:** Ein konfiguriertes Holding- oder Input-Register direkt von der Wärmepumpe
-  lesen.
-- **Werte dekodieren:** Vorzeichenbehaftete `int16`- und vorzeichenlose `uint16`-Register inklusive
-  Skalierung und Offset in verständliche Werte umrechnen.
-- **Kontrolliert schreiben:** Ein freigegebenes Holding-Register skalieren, auf Minimal- und
-  Maximalwert prüfen und schreiben.
-- **Gerätespezifisch arbeiten:** Die Register werden als JSON konfiguriert und können damit an Modell,
-  Firmware und Anlagenkonfiguration angepasst werden.
-- **Mehrere MCP-Oberflächen bedienen:** Funktionen werden sowohl als MCP-Tools als auch als
-  MCP-Resources angeboten.
+- **Modell erkennen:** Controller-Familie (Navigator 1.7 / 2.0 / 10 / Pro), aktive Heizkreise,
+  Zonenmodule, Solar, ISC, PV und Kaskade automatisch ermitteln.
+- **Datenpunkte auflisten:** Schlüssel, Adresse, Datentyp, Einheit, Skalierung, Wertebereich,
+  Enum-Optionen und Write-Klasse anzeigen.
+- **Live-Werte lesen:** Einzelwerte oder alle lesbaren Datenpunkte in einem Batch (mit kurzem
+  Snapshot-Cache) lesen.
+- **Werte verstehen:** Enumerationen (z. B. Betriebsmodi) werden mit Label übersetzt,
+  „nicht konfiguriert“-Sentinelwerte als `unused` markiert.
+- **Fehlercodes erklären:** die 2005 Meldungsnummern der Controller-Datenbank mit Benutzer- und
+  Servicetext auflösen.
+- **Kontrolliert schreiben:** Schreibpläne ohne Gerätekontakt validieren (`validate_write`) und
+  freigegebene Register mit voller Bereichs-, Enum- und Modellprüfung schreiben.
+- **Diagnose:** Verbindungsstatus, dauerhaft fehlgeschlagene und nicht unterstützte Register sowie
+  zyklische Schreibanforderungen einsehen.
 - **Lokal bleiben:** Die Verbindung zur Wärmepumpe erfolgt aus dem eigenen Netzwerk; der Server
   benötigt keinen Cloud-Zugang.
 
@@ -65,19 +70,27 @@ die in der lokalen Registerdatei definierten Werte als MCP-Tools und MCP-Resourc
 
 | Tool | Zweck | Beispiel |
 |---|---|---|
-| `list_entities` | Alle konfigurierten Entities und Metadaten anzeigen | „Welche Wärmepumpenwerte kannst du lesen?“ |
-| `read_entity` | Aktuellen Wert eines Entity lesen | „Lies `heating.outside_temperature` aus.“ |
-| `write_entity` | Einen ausdrücklich erlaubten Wert setzen | „Setze den freigegebenen Sollwert auf 21 °C.“ |
+| `detect_model` | Controller-Modell und Anlagenstruktur erkennen | „Erkenne meine Wärmepumpe.“ |
+| `list_datapoints` | Datenpunkte mit Metadaten anzeigen (filterbar) | „Welche Werte gibt es zum Warmwasser?“ |
+| `read_datapoint` | Aktuellen Wert eines Datenpunkts lesen | „Lies `outdoor_temp` aus.“ |
+| `read_all_datapoints` | Kompletten Anlagen-Snapshot lesen | „Gib mir alle aktuellen Werte.“ |
+| `validate_write` | Schreibplan prüfen, ohne zu schreiben | „Wäre 52 °C Warmwasser erlaubt?“ |
+| `write_datapoint` | Freigegebenen Wert setzen (Default: gesperrt) | „Setze `dhw_setpoint` auf 52.“ |
+| `explain_error_code` | Controller-Meldungsnummer erklären | „Was bedeutet Meldung 142?“ |
+| `get_diagnostics` | Verbindungs- und Registerdiagnose | „Welche Register schlagen fehl?“ |
 
 ### Verfügbare MCP-Resources
 
 | Resource | Inhalt |
 |---|---|
-| `idm://entities` | Liste aller konfigurierten Entities |
-| `idm://entities/{name}` | Aktueller Wert eines bestimmten Entity |
+| `idm://model` | Erkanntes Modell und Fähigkeiten |
+| `idm://datapoints` | Vollständige Datenpunkt-Karte |
+| `idm://datapoints/{key}` | Aktueller Wert eines Datenpunkts |
+| `idm://values` | Zwischengespeicherter Gesamt-Snapshot |
+| `idm://diagnostics` | Client-Diagnose |
 
-Welche konkreten Temperaturen, Betriebszustände oder Sollwerte verfügbar sind, entscheidet allein
-die lokale `registers.json`. Ohne konfigurierte Entities liefert `list_entities` eine leere Liste.
+Welche konkreten Datenpunkte existieren, entscheidet die erkannte Anlage bzw. die Registerkarte
+der `idm-heatpump-api`.
 
 ## Sicherheitskonzept
 
@@ -85,19 +98,20 @@ Der Server startet grundsätzlich **read-only**. Ein Schreibzugriff wird nur aus
 drei Bedingungen gleichzeitig erfüllt sind:
 
 1. `IDM_ALLOW_WRITES=true` aktiviert Schreiben global,
-2. das betreffende Entity besitzt `"writable": true`, und
-3. seine Adresse steht zusätzlich in `IDM_WRITABLE_ADDRESSES`.
+2. die Write-Klasse des Registers (`volatile`, `cyclic`, `eeprom` oder `write_only`) steht in
+   `IDM_WRITE_CLASSES`, und
+3. ist `IDM_WRITABLE_KEYS` gesetzt, enthält diese Allowlist den Registernamen.
 
-Optionale `minimum`- und `maximum`-Werte begrenzen den erlaubten Sollwert zusätzlich. So führt weder
-eine ungenaue Formulierung noch ein einzelner fehlerhafter Konfigurationseintrag automatisch zu
-einem Schreibzugriff. Trotzdem müssen alle Adressen und Grenzen fachlich geprüft werden. Weitere
+Darüber hinaus validiert `idm-heatpump-api` jeden Schreibzugriff gegen Wertebereich, Enumerationen
+und Modellverfügbarkeit und drosselt wiederholte EEPROM-Schreibzugriffe (max. einer pro Register
+und 60 s) zum Schutz des begrenzt beschreibbaren Controllerspeichers. Mit `validate_write` oder
+`dry_run=true` lässt sich jeder Schreibplan vorab prüfen, ohne das Gerät zu berühren. Weitere
 Hinweise stehen unter [Sicherer Betrieb](docs/safety.md).
 
 ## Voraussetzungen
 
 - IDM-Wärmepumpe mit aktiviertem und im LAN erreichbarem Modbus TCP
-- für das konkrete Gerät und die Firmware verifizierte Registeradressen
-- Python 3.11 oder neuer oder alternativ Docker
+- Python 3.12 oder neuer oder alternativ Docker
 - ein lokaler MCP-Client mit `stdio`-Unterstützung
 
 ## Schnellstart
@@ -107,22 +121,22 @@ python -m venv .venv
 source .venv/bin/activate
 pip install .
 cp .env.example .env
-cp config/registers.example.json config/registers.json
-# .env und registers.json an das eigene Gerät anpassen
+# .env an die eigene Anlage anpassen (mindestens IDM_HOST)
 idm-mcp
 ```
 
-Die Beispieladressen sind **keine echten bzw. universellen IDM-Adressen**. Register können je nach
-Modell, Firmware und Anlagenkonfiguration abweichen. Nur verifizierte Adressen verwenden.
+Modell und Registerkarten werden beim ersten Aufruf von `detect_model` automatisch ermittelt;
+eine eigene Registerdatei ist nicht erforderlich. Wer die Erkennung überspringen möchte, setzt
+`IDM_MODEL` (z. B. `navigator10`).
 
 Danach wird die gewünschte KI-Anwendung gemäß der
 [clientbezogenen Anleitung](docs/clients.md) eingerichtet. Ein sinnvoller erster Test im Client ist:
 
-> Liste alle konfigurierten IDM-Entities auf. Schreibe keine Werte.
+> Erkenne meine Wärmepumpe und zeige mir danach alle verfügbaren Datenpunkte. Schreibe keine Werte.
 
-Anschließend kann ein tatsächlich konfiguriertes Entity gelesen werden:
+Anschließend kann ein konkreter Messwert gelesen werden:
 
-> Lies `heating.outside_temperature` und erkläre Wert und Einheit. Verändere nichts.
+> Lies `outdoor_temp` und `storage_temp` und erkläre Wert und Einheit. Verändere nichts.
 
 ## MCP-Client
 
@@ -148,11 +162,9 @@ in einem separaten Repository und werden nicht automatisch mit diesem Repository
 
 ## Aktuelle Grenzen
 
-- nur einzelne 16-Bit-Register (`uint16` und `int16`), noch keine 32-Bit-, Float-, String- oder
-  Bitfeld-Entities,
-- keine automatische Erkennung von Modell, Firmware oder Registertabelle,
-- keine mitgelieferte universelle IDM-Registerliste,
-- keine Zeitreihen, Statistiken, Diagramme oder lokale Datenbank,
+- Lesen und Schreiben einzelner 16-/32-Bit-Register gemäß Registerkarte der
+  `idm-heatpump-api`; keine freien Rohadressen ohne Kartenbezug,
+- keine mitgelieferte Zeitreihen, Statistiken, Diagramme oder lokale Datenbank,
 - aktuell nur lokaler MCP-Transport über `stdio`, kein öffentlicher HTTPS-Endpunkt,
 - keine Authentifizierung innerhalb von Modbus TCP.
 
